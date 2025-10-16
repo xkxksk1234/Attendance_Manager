@@ -1,0 +1,84 @@
+# -----------------------------
+# Java / Maven build outputs
+# -----------------------------
+/target/
+/dist/
+/out/
+/dependency-reduced-pom.xml
+
+# jpackage temp / images
+/jpkg-*/               # if you run jpackage outside target
+/_jpkg-*/              # our recommended temp outside target
+/target/jpkg-*/
+/target/jpkg-tmp/
+/target/*.image/
+/target/*.msi
+/target/*.exe
+
+# -----------------------------
+# IDE files
+# -----------------------------
+# Eclipse
+/.project
+/.classpath
+/.settings/
+/.metadata/
+
+# IntelliJ (혹시 사용 시)
+/.idea/
+/*.iml
+/.run/
+
+# VS Code
+.vscode/
+
+# -----------------------------
+# OS cruft
+# -----------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# -----------------------------
+# Logs / temp
+# -----------------------------
+*.log
+*.tmp
+*.swp
+*.swo
+*.bak
+
+# -----------------------------
+# Local runtime/data
+# -----------------------------
+# (레거시) 로컬에 두던 DB 폴더는 커밋하지 않음
+/db/
+*.db
+
+# 사용자 환경 파일(있다면)
+/.env
+*.local.properties
+
+# -----------------------------
+# WiX toolset intermediates (if checked in)
+# -----------------------------
+*.wixobj
+*.wixpdb
+*.wxi
+*.wxl~    # temp edits
+
+# -----------------------------
+# Assets
+# -----------------------------
+# 빌드 산출 아이콘/이미지는 무시하되, 우리가 관리하는 정식 아이콘은 추적
+*.ico
+*.png
+!branding/
+!branding/app.ico
+!branding/**
+
+# -----------------------------
+# Misc
+# -----------------------------
+/bin/
+/build/

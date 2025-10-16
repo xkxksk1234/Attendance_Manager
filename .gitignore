@@ -77,9 +77,10 @@ desktop.ini
 # 빌드 산출 아이콘/이미지는 무시하되, 우리가 관리하는 정식 아이콘은 추적
 *.ico
 *.png
-!branding/
-!branding/app.ico
-!branding/**
+!/src/main/resources/icons/
+!/src/main/resources/icons/attendance_favicon.ico
+!/src/main/resources/icons/attendance_favicon.png
+!/src/main/resources/icons/**
 
 # -----------------------------
 # Misc

@@ -9,11 +9,15 @@
 # jpackage temp / images
 /jpkg-*/               # if you run jpackage outside target
 /_jpkg-*/              # our recommended temp outside target
+/_jpkg-tmp/
+/_jpkg-tmp/config
 /target/jpkg-*/
 /target/jpkg-tmp/
 /target/*.image/
 /target/*.msi
 /target/*.exe
+/target.*/
+/project-structure.txt/
 
 # -----------------------------
 # IDE files

@@ -1,0 +1,178 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.maemong.attendance</groupId>
+    <artifactId>attendance-manager</artifactId>
+    <version>0.0.1-beta</version>
+    <name>Attendance Manager</name>
+
+    <properties>
+        <!-- Java 21 -->
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- libs -->
+        <junit.version>5.10.2</junit.version>
+        <slf4j.version>2.0.13</slf4j.version>
+        <logback.version>1.5.6</logback.version>
+
+        <!-- App meta -->
+        <app.name>근태관리(베타)</app.name>                 <!-- 앱 내부 타이틀 등 -->
+        <app.name.win>AttendanceManager</app.name.win>     <!-- 설치자 표기(영문 안전) -->
+        <app.version>0.0.1-beta</app.version>              <!-- 표시용 -->
+        <app.version.win>0.0.1</app.version.win>           <!-- jpackage용 숫자 버전 -->
+        <app.vendor>Maemong</app.vendor>
+        <app.main.class>com.maemong.attendance.App</app.main.class>
+
+        <!-- Packaging control -->
+        <win.installer.type>msi</win.installer.type>       <!-- exe / msi / app-image -->
+        <win.upgrade.uuid>3f0b1c8d-0c33-41f8-9d61-0a1cbe7e1234</win.upgrade.uuid> <!-- 고정 GUID -->
+
+        <!-- Shade 결과 파일명 (경로 없이 파일명만) -->
+        <shade.finalName>${project.artifactId}-${project.version}-shaded</shade.finalName>
+
+        <!-- jpackage 임시 폴더를 input(target) '바깥'으로 강제 (루프 방지) -->
+        <jpackage.temp>${project.basedir}\_jpkg-tmp</jpackage.temp>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.46.0.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>${logback.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Java 21 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                </configuration>
+            </plugin>
+
+            <!-- JUnit 5 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+
+            <!-- 실행 가능한 fat-jar 생성 (원본 교체 X, shaded classifier 부여) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.3</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals><goal>shade</goal></goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>shaded</shadedClassifierName>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>${app.main.class}</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <!-- Windows에서만 jpackage 실행 -->
+    <profiles>
+        <profile>
+            <id>win-exe</id>
+            <activation>
+                <os><family>windows</family></os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <execution>
+                                <id>jpackage-exe</id>
+                                <phase>package</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>jpackage</executable>
+
+                                    <!-- WiX v3.14 경로를 빌드 시에만 PATH 앞에 주입 (시스템 PATH 건드리지 않음) -->
+                                    <environmentVariables>
+                                        <PATH>C:\Program Files (x86)\WiX Toolset v3.14\bin;${env.PATH}</PATH>
+                                    </environmentVariables>
+
+                                    <arguments>
+                                        <!-- ✅ 한 번만 지정 -->
+                                        <argument>--type</argument><argument>${win.installer.type}</argument>
+
+                                        <argument>--name</argument><argument>${app.name.win}</argument>
+                                        <argument>--app-version</argument><argument>${app.version.win}</argument>
+                                        <argument>--vendor</argument><argument>${app.vendor}</argument>
+
+                                        <!-- ✅ input은 반드시 'target'만 (루프 방지) -->
+                                        <argument>--input</argument><argument>${project.build.directory}</argument>
+
+                                        <!-- ✅ main-jar는 파일명만 (경로 붙이지 않음) -->
+                                        <argument>--main-jar</argument><argument>${shade.finalName}.jar</argument>
+                                        <argument>--main-class</argument><argument>${app.main.class}</argument>
+
+                                        <argument>--dest</argument><argument>dist</argument>
+                                        <argument>--win-menu</argument>
+                                        <argument>--win-shortcut</argument>
+                                        <argument>--win-per-user-install</argument>
+                                        <argument>--win-dir-chooser</argument>
+
+                                        <!-- MSI 업그레이드 추적용 고정 GUID -->
+                                        <argument>--win-upgrade-uuid</argument><argument>${win.upgrade.uuid}</argument>
+
+                                        <!-- 디버그 편의 -->
+                                        <argument>--verbose</argument>
+
+                                        <!-- ✅ temp는 input(target) '바깥' 경로로 (루프 완전 차단) -->
+                                        <argument>--temp</argument><argument>${jpackage.temp}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

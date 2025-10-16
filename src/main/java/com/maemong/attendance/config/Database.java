@@ -8,17 +8,24 @@ public class Database {
 
     /** 호출 시점의 점포 컨텍스트(StoreContext) 기준으로 연결 생성 */
     public static Connection getConnection() throws SQLException {
-        String dbPath = StoreContext.getDbFilePath();
-        try {
-            Files.createDirectories(Path.of(dbPath).getParent());
-        } catch (Exception ignored) {}
+	    String dbPath = StoreContext.getDbFilePath();
 
-        Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
-        try (Statement st = conn.createStatement()) {
-            st.execute("PRAGMA foreign_keys=ON;");
-        }
-        ensureSchemas(conn);   // 점포별 DB에 테이블이 없으면 생성/보정
-        return conn;
+	    // 상위 폴더 생성(혹시 누락돼 있을 수 있으니 안전하게)
+	    try {
+		    Path parent = Path.of(dbPath).getParent();
+		    if (parent != null) Files.createDirectories(parent);
+	    } catch (Exception ignored) {}
+
+	    Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+	    try (Statement st = conn.createStatement()) {
+		    st.execute("PRAGMA foreign_keys=ON;");
+		    // ✅ 성능/안정성 추천 설정
+		    st.execute("PRAGMA journal_mode=WAL;");
+		    st.execute("PRAGMA synchronous=NORMAL;");
+	    }
+
+	    ensureSchemas(conn); // 기존 스키마 보정 로직 그대로 유지
+	    return conn;
     }
 
     /* ───────── 스키마 보장/마이그레이션 ───────── */

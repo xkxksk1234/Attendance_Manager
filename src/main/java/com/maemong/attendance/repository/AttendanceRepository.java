@@ -21,6 +21,46 @@ public class AttendanceRepository {
 		}
 	}
 
+	// AttendanceRepository.java 내부
+	private void migrateAddEmpNameIfMissing() {
+		try (java.sql.Connection conn = com.maemong.attendance.config.Database.getConnection();
+		     java.sql.Statement st = conn.createStatement()) {
+
+			// emp_name 컬럼 존재 여부 확인
+			boolean exists = false;
+			try (java.sql.ResultSet rs = st.executeQuery("PRAGMA table_info(attendance)")) {
+				while (rs.next()) {
+					if ("emp_name".equalsIgnoreCase(rs.getString("name"))) {
+						exists = true;
+						break;
+					}
+				}
+			}
+
+			if (!exists) {
+				// 1) 컬럼 추가
+				st.executeUpdate("ALTER TABLE attendance ADD COLUMN emp_name TEXT");
+
+				// 2) employees에서 이름 백필
+				//    ※ 별칭 사용 금지, 바깥 테이블은 'attendance'로 직접 참조
+				st.executeUpdate(
+						"UPDATE attendance " +
+								"SET emp_name = (" +
+								"  SELECT e.name FROM employees e " +
+								"  WHERE e.emp_no = attendance.emp_no" +
+								") " +
+								"WHERE emp_name IS NULL"
+				);
+
+				// 3) 선택: 인덱스
+				st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_att_emp_name ON attendance(emp_name)");
+			}
+
+		} catch (Exception ex) {
+			ex.printStackTrace(); // 마이그레이션 실패해도 앱 중단 X
+		}
+	}
+
 	/* ===================== Schema ===================== */
 
 	private void createTableIfNotExists() throws SQLException {
@@ -44,14 +84,55 @@ public class AttendanceRepository {
 	}
 
 	/** PRAGMA로 컬럼 목록 조회 */
-	private boolean hasColumn(String table, String col) throws SQLException {
-		try (Connection c = Database.getConnection();
-		     PreparedStatement ps = c.prepareStatement("PRAGMA table_info(" + table + ")");
-		     ResultSet rs = ps.executeQuery()) {
+	// AttendanceRepository.java 내부
+
+	// 컬럼 존재 여부 유틸(중복 없으면 추가)
+	private boolean hasColumn(java.sql.Connection conn, String table, String column) throws java.sql.SQLException {
+		try (java.sql.PreparedStatement ps = conn.prepareStatement("PRAGMA table_info(" + table + ")");
+		     java.sql.ResultSet rs = ps.executeQuery()) {
 			while (rs.next()) {
-				if (col.equalsIgnoreCase(rs.getString("name"))) return true;
+				if (column.equalsIgnoreCase(rs.getString("name"))) return true;
 			}
-			return false;
+		}
+		return false;
+	}
+
+	// AttendanceRepository.java 내부에 추가
+	private boolean hasColumn(String table, String column) throws java.sql.SQLException {
+		try (java.sql.Connection conn = com.maemong.attendance.config.Database.getConnection()) {
+			return hasColumn(conn, table, column); // 3-인자 버전으로 위임
+		}
+	}
+
+	// Repository의 공개 API — Service는 이걸 호출해야 함
+	public void clockIn(String empNo, String workDate, String inTime, String memo) throws java.sql.SQLException {
+		insertIn(empNo, workDate, inTime, memo);  // private 메서드 위임
+	}
+
+	public void clockOut(String empNo, String outDate, String outTime) throws java.sql.SQLException {
+		// 가장 최근 미퇴근 1건에 퇴근 시간/날짜 채우기
+		try (java.sql.Connection conn = com.maemong.attendance.config.Database.getConnection()) {
+			boolean hasOutDate = hasColumn(conn, "attendance", "out_date");
+			if (hasOutDate) {
+				try (java.sql.PreparedStatement ps = conn.prepareStatement(
+						"UPDATE attendance SET out_time=?, out_date=? " +
+								"WHERE id = (SELECT id FROM attendance WHERE emp_no=? AND out_time IS NULL ORDER BY id DESC LIMIT 1)"
+				)) {
+					ps.setString(1, outTime);
+					ps.setString(2, outDate);
+					ps.setString(3, empNo);
+					ps.executeUpdate();
+				}
+			} else {
+				try (java.sql.PreparedStatement ps = conn.prepareStatement(
+						"UPDATE attendance SET out_time=? " +
+								"WHERE id = (SELECT id FROM attendance WHERE emp_no=? AND out_time IS NULL ORDER BY id DESC LIMIT 1)"
+				)) {
+					ps.setString(1, outTime);
+					ps.setString(2, empNo);
+					ps.executeUpdate();
+				}
+			}
 		}
 	}
 
@@ -152,22 +233,20 @@ public class AttendanceRepository {
 	}
 
 	/** 출근 등록 */
-	public long insertIn(String empNo, String empName, String date, String inTime, String memo) throws SQLException {
-		String sql = """
-            INSERT INTO attendance (emp_no, emp_name, "date", in_time, "out_date", out_time, memo)
-            VALUES (?, ?, ?, ?, NULL, NULL, ?)
-            """;
-		try (Connection c = Database.getConnection();
-		     PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+	// AttendanceRepository.java 내부
+	// 시그니처가 이미 (String empNo, String workDate, String inTime, String memo) 라면
+	// 본문만 아래로 교체. 시그니처가 다르면 호출부 기준에 맞춰 파라미터 이름만 맞게 바꿔 주세요.
+	private void insertIn(String empNo, String workDate, String inTime, String memo) throws java.sql.SQLException {
+		try (java.sql.Connection conn = com.maemong.attendance.config.Database.getConnection();
+		     java.sql.PreparedStatement ps = conn.prepareStatement(
+				     // ✅ work_date를 반드시 컬럼 목록에 명시
+				     "INSERT INTO attendance (emp_no, work_date, in_time, memo) VALUES (?, ?, ?, ?)"
+		     )) {
 			ps.setString(1, empNo);
-			ps.setString(2, empName);
-			ps.setString(3, date);
-			ps.setString(4, inTime);
-			ps.setString(5, memo);
+			ps.setString(2, workDate);  // NOT NULL!
+			ps.setString(3, inTime);
+			ps.setString(4, memo);
 			ps.executeUpdate();
-			try (ResultSet keys = ps.getGeneratedKeys()) {
-				return keys.next() ? keys.getLong(1) : 0L;
-			}
 		}
 	}
 

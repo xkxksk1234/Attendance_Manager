@@ -239,12 +239,12 @@ public class AttendanceRepository {
 	private void insertIn(String empNo, String workDate, String inTime, String memo) throws java.sql.SQLException {
 		try (java.sql.Connection conn = com.maemong.attendance.config.Database.getConnection();
 		     java.sql.PreparedStatement ps = conn.prepareStatement(
-				     // ✅ work_date를 반드시 컬럼 목록에 명시
-				     "INSERT INTO attendance (emp_no, work_date, in_time, memo) VALUES (?, ?, ?, ?)"
+				     // ✅ 스키마 컬럼명과 일치시키기: "date"
+				     "INSERT INTO attendance (emp_no, \"date\", in_time, memo) VALUES (?, ?, ?, ?)"
 		     )) {
 			ps.setString(1, empNo);
-			ps.setString(2, workDate);  // NOT NULL!
-			ps.setString(3, inTime);
+			ps.setString(2, workDate);  // YYYY-MM-DD
+			ps.setString(3, inTime);    // HH:mm:ss
 			ps.setString(4, memo);
 			ps.executeUpdate();
 		}

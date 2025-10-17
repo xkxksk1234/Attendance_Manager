@@ -198,7 +198,7 @@ public class AttendanceRepository {
 		String sql = """
             SELECT id, emp_no, emp_name, "date", in_time, "out_date", out_time, memo
             FROM attendance
-            WHERE substr("date",1,7) = ?
+            WHERE substr("date",1,7) = ? 
             ORDER BY "date" ASC, in_time ASC, emp_no ASC, id ASC
             """;
 		try (Connection c = Database.getConnection();

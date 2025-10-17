@@ -45,6 +45,11 @@ public class PanelRecords extends JPanel implements UnsavedAware {
 	private final JTextField tfSearch = UiKit.input(14);
 	private final JButton btnClearSearch = UiKit.secondary("지우기");
 
+	// PanelRecords 상단 필드 (없으면 추가)
+	private final com.maemong.attendance.service.AttendanceService service =
+			new com.maemong.attendance.service.AttendanceService();
+
+
 	/* ===== Table ===== */
 	private final DefaultTableModel model = new DefaultTableModel(
 			new Object[]{"사번","이름","날짜","출근","퇴근","메모","ID"}, 0) {
@@ -100,6 +105,104 @@ public class PanelRecords extends JPanel implements UnsavedAware {
 		loadRecords();
 
 		installSearchFilter(); // ★ 검색 필터
+	}
+
+	// PanelRecords 내부 아무 곳에 추가
+	private boolean isMonthlyMode() {
+		// 네가 월/일 모드를 선택하는 컴포넌트가 라디오가 아니라 콤보/토글이면 여기서 바꿔도 됨.
+		try {
+			java.lang.reflect.Field f = getClass().getDeclaredField("rbMonthly");
+			f.setAccessible(true);
+			Object o = f.get(this);
+			if (o instanceof javax.swing.JRadioButton) {
+				return ((javax.swing.JRadioButton) o).isSelected();
+			}
+		} catch (Exception ignore) { }
+		// 라디오가 없으면 기본을 "월별"로
+		return true;
+	}
+
+	// "(27236) 홍길동" -> "27236"
+	private String selectedEmpNoOrNull() {
+		Object sel = cbEmp.getSelectedItem();
+		if (sel == null) return null;
+		String s = sel.toString().trim();
+		if (s.isEmpty() || "전체".equals(s)) return null;
+
+		java.util.regex.Matcher m = java.util.regex.Pattern.compile("^\\(([^)]+)\\)").matcher(s);
+		if (m.find()) return m.group(1).trim();
+		return s;
+	}
+
+	// yyyy-MM-dd
+	private String selectedDate() {
+		int y = (int) cbYear.getSelectedItem();
+		int m = (int) cbMonth.getSelectedItem();
+		int d = (int) cbDay.getSelectedItem();
+		return String.format("%04d-%02d-%02d", y, m, d);
+	}
+
+	// yyyy-MM
+	private String selectedYearMonth() {
+		int y = (int) cbYear.getSelectedItem();
+		int m = (int) cbMonth.getSelectedItem();
+		return String.format("%04d-%02d", y, m);
+	}
+
+	private void reloadRecords() {
+		try {
+			// 0) 테이블 필터(검색 등) 초기화 — 제네릭 오류 안 나게 안전캐스팅
+			if (table != null && table.getRowSorter() instanceof javax.swing.table.TableRowSorter) {
+				((javax.swing.table.TableRowSorter<?>) table.getRowSorter()).setRowFilter(null);
+			}
+			if (sorter != null) sorter.setRowFilter(null);
+
+			// 1) 조건 만들기
+			final boolean monthly = isMonthlyMode();
+			final String empNo = selectedEmpNoOrNull();
+
+			java.util.List<com.maemong.attendance.model.AttendanceRecord> list;
+			if (monthly) {
+				String ym = selectedYearMonth();          // yyyy-MM (제로패딩)
+				list = service.recordsInMonth(ym);
+			} else {
+				String date = selectedDate();             // yyyy-MM-dd (제로패딩)
+				list = service.recordsAt(date);
+			}
+
+			// 2) 사번 필터(선택됐을 때만)
+			if (empNo != null && !empNo.isBlank()) {
+				list.removeIf(r -> r.getEmpNo() == null || !empNo.equals(r.getEmpNo()));
+			}
+
+			// 3) 테이블 채우기
+			fillTable(list);
+
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			javax.swing.JOptionPane.showMessageDialog(this, ex.getMessage(), "조회 오류",
+					javax.swing.JOptionPane.ERROR_MESSAGE);
+		}
+	}
+
+	// 네가 유지하는 컬럼 순서로 바꾸어 사용
+	private void fillTable(java.util.List<com.maemong.attendance.model.AttendanceRecord> list) {
+		// model이 널이면 return
+		if (model == null) return;
+		model.setRowCount(0);
+		for (com.maemong.attendance.model.AttendanceRecord r : list) {
+			model.addRow(new Object[]{
+					r.getId(),
+					r.getEmpNo(),
+					r.getEmpName(),
+					// date는 출근일 기준, outDate가 있으면 옆 칸에 표시하고 싶으면 한 칸 더 추가하세요
+					r.getDate(),
+					r.getInTime(),
+					r.getOutTime(),
+					r.getMemo()
+			});
+		}
+		model.fireTableDataChanged();
 	}
 
 	/* ===================== UI Builders ===================== */
